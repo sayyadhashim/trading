@@ -26,9 +26,7 @@ TELEGRAM_TOKEN = "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
 TELEGRAM_CHAT_ID = "8701070280"
 
 def send_telegram_alert(message):
-    if TELEGRAM_TOKEN == "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys":
-        print(f"🚨 [LOCAL ALERT] {message}") 
-        return
+    """Sends the alert directly to your phone via Telegram."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
