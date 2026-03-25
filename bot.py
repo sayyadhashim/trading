@@ -20,11 +20,11 @@ ATR_MULT = 1.5
 RR_RATIO = 3.0
 
 # TODO: Add your Telegram Bot credentials here
-TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"
+TELEGRAM_TOKEN = "AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
+TELEGRAM_CHAT_ID = "8701070280"
 
 def send_telegram_alert(message):
-    if TELEGRAM_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
+    if TELEGRAM_TOKEN == "AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys":
         print(f"🚨 [LOCAL ALERT] {message}") 
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
