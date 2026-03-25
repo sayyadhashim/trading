@@ -14,17 +14,19 @@ warnings.filterwarnings('ignore')
 # =============================================================================
 # CONFIGURATION & TELEGRAM SETUP
 # =============================================================================
-TICKER = "SBIN.NS"
+# ADD YOUR STOCKS HERE! (Make sure they have .NS for National Stock Exchange)
+TICKERS = ["SBIN.NS", "WIPRO.NS", "RELIANCE.NS", "TCS.NS", "INFY.NS"] 
+
 ENTRY_THRESH = 0.60
 ATR_MULT = 1.5
 RR_RATIO = 3.0
 
-# TODO: Add your Telegram Bot credentials here
+# TODO: Keep your actual Telegram credentials here!
 TELEGRAM_TOKEN = "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
 TELEGRAM_CHAT_ID = "8701070280"
 
 def send_telegram_alert(message):
-    if TELEGRAM_TOKEN == "AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys":
+    if TELEGRAM_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
         print(f"🚨 [LOCAL ALERT] {message}") 
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -37,8 +39,8 @@ def send_telegram_alert(message):
 # =============================================================================
 # PURE PANDAS MATH
 # =============================================================================
-def fetch_live_data():
-    df = yf.download(TICKER, period="7d", interval="5m", progress=False)
+def fetch_live_data(symbol):
+    df = yf.download(symbol, period="7d", interval="5m", progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df.columns = [c.strip().lower() for c in df.columns]
@@ -76,14 +78,14 @@ def compute_probabilities(states):
     return second_prob, overall_t
 
 # =============================================================================
-# THE LIVE SCANNER ENGINE
+# THE LIVE SCANNER ENGINE (Updated for multiple tickers)
 # =============================================================================
-def scan_market():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning {TICKER}...")
+def scan_market(symbol):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning {symbol}...")
     
-    df = fetch_live_data()
+    df = fetch_live_data(symbol)
     if len(df) < 200:
-        print("Not enough data to calculate 200 SMA. Waiting...")
+        print(f"Not enough data for {symbol}. Waiting...")
         return
 
     df = add_regime_labels(df)
@@ -109,27 +111,25 @@ def scan_market():
     sma = last_bar['sma']
     atr = last_bar['atr']
     
-    print(f"  -> Latest Close: {price:.2f} | Prob: {p_t:.2f} | Vol OK: {last_bar['vol_ok']}")
+    print(f"  -> {symbol} Close: {price:.2f} | Prob: {p_t:.2f} | Vol OK: {last_bar['vol_ok']}")
     
     if p_t >= ENTRY_THRESH and last_bar['vol_ok'] and valid_time:
         if prev_bar['Close'] > prev_bar['sma']:
             sl = price - (ATR_MULT * atr)
             tp = price + (ATR_MULT * RR_RATIO * atr)
-            msg = f"🟢 **LONG ALERT: {TICKER}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
+            msg = f"🟢 **LONG ALERT: {symbol}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
             send_telegram_alert(msg)
-            print(">>> SIGNAL FIRED! Waiting 5 minutes...")
-            time.sleep(300) 
+            print(f">>> SIGNAL FIRED for {symbol}!")
             
         elif prev_bar['Close'] < prev_bar['sma']:
             sl = price + (ATR_MULT * atr)
             tp = price - (ATR_MULT * RR_RATIO * atr)
-            msg = f"🔴 **SHORT ALERT: {TICKER}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
+            msg = f"🔴 **SHORT ALERT: {symbol}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
             send_telegram_alert(msg)
-            print(">>> SIGNAL FIRED! Waiting 5 minutes...")
-            time.sleep(300)
+            print(f">>> SIGNAL FIRED for {symbol}!")
 
 # =============================================================================
-# DUMMY WEB SERVER (To trick Render into giving us the free tier)
+# DUMMY WEB SERVER 
 # =============================================================================
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -144,14 +144,18 @@ def keep_alive():
     server.serve_forever()
 
 if __name__ == "__main__":
-    # 1. Start the fake web server in the background
     threading.Thread(target=keep_alive, daemon=True).start()
     
-    # 2. Start the actual trading bot
-    print("🚀 Starting Cloud-Ready Markov Scanner...")
+    print("🚀 Starting Multi-Ticker Markov Scanner...")
     while True:
-        try:
-            scan_market()
-        except Exception as e:
-            print(f"Error during scan: {e}")
+        for stock in TICKERS:
+            try:
+                scan_market(stock)
+            except Exception as e:
+                print(f"Error scanning {stock}: {e}")
+            
+            # Sleep for 5 seconds between each stock to avoid Yahoo Finance rate limits
+            time.sleep(5) 
+            
+        print("✅ Finished scanning watchlist. Sleeping for 5 minutes...")
         time.sleep(300)
