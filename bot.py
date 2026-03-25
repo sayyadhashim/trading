@@ -5,6 +5,10 @@ import time
 import requests
 from datetime import datetime
 import warnings
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import os
+
 warnings.filterwarnings('ignore')
 
 # =============================================================================
@@ -31,7 +35,7 @@ def send_telegram_alert(message):
         print(f"Failed to send Telegram alert: {e}")
 
 # =============================================================================
-# PURE PANDAS MATH (NO TA-LIB REQUIRED)
+# PURE PANDAS MATH
 # =============================================================================
 def fetch_live_data():
     df = yf.download(TICKER, period="7d", interval="5m", progress=False)
@@ -43,7 +47,6 @@ def fetch_live_data():
 
 def add_regime_labels(df, atr_period=14, threshold=0.6):
     df = df.copy()
-    # Calculate True Range & ATR using pure Pandas
     high_low = df['High'] - df['Low']
     high_close = np.abs(df['High'] - df['Close'].shift(1))
     low_close = np.abs(df['Low'] - df['Close'].shift(1))
@@ -126,9 +129,25 @@ def scan_market():
             time.sleep(300)
 
 # =============================================================================
-# CONTINUOUS LOOP
+# DUMMY WEB SERVER (To trick Render into giving us the free tier)
 # =============================================================================
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b"Markov Trading Bot is actively scanning the market!")
+
+def keep_alive():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), DummyHandler)
+    server.serve_forever()
+
 if __name__ == "__main__":
+    # 1. Start the fake web server in the background
+    threading.Thread(target=keep_alive, daemon=True).start()
+    
+    # 2. Start the actual trading bot
     print("🚀 Starting Cloud-Ready Markov Scanner...")
     while True:
         try:
