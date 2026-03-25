@@ -20,7 +20,7 @@ ATR_MULT = 1.5
 RR_RATIO = 3.0
 
 # TODO: Add your Telegram Bot credentials here
-TELEGRAM_TOKEN = "AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
+TELEGRAM_TOKEN = "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
 TELEGRAM_CHAT_ID = "8701070280"
 
 def send_telegram_alert(message):
