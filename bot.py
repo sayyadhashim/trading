@@ -1,0 +1,138 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import time
+import requests
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
+
+# =============================================================================
+# CONFIGURATION & TELEGRAM SETUP
+# =============================================================================
+TICKER = "SBIN.NS"
+ENTRY_THRESH = 0.60
+ATR_MULT = 1.5
+RR_RATIO = 3.0
+
+# TODO: Add your Telegram Bot credentials here
+TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"
+
+def send_telegram_alert(message):
+    if TELEGRAM_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
+        print(f"🚨 [LOCAL ALERT] {message}") 
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Failed to send Telegram alert: {e}")
+
+# =============================================================================
+# PURE PANDAS MATH (NO TA-LIB REQUIRED)
+# =============================================================================
+def fetch_live_data():
+    df = yf.download(TICKER, period="7d", interval="5m", progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df.columns = [c.strip().lower() for c in df.columns]
+    df.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close'}, inplace=True)
+    return df.dropna()
+
+def add_regime_labels(df, atr_period=14, threshold=0.6):
+    df = df.copy()
+    # Calculate True Range & ATR using pure Pandas
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift(1))
+    low_close = np.abs(df['Low'] - df['Close'].shift(1))
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df['atr'] = tr.rolling(atr_period).mean()
+    
+    df['prev_atr'] = df['atr'].shift(1)
+    df['up_diff'] = (df['High'] - df['Open']) / df['prev_atr']
+    df['down_diff'] = (df['Open'] - df['Low']) / df['prev_atr']
+    
+    df['regime'] = 'r'
+    mask = (df['up_diff'] >= threshold) | (df['down_diff'] >= threshold)
+    df.loc[mask, 'regime'] = 't'
+    return df.dropna(subset=['prev_atr'])
+
+def compute_probabilities(states):
+    s = [1 if x == 't' else 0 for x in states]
+    n = len(s)
+    second = {}
+    for i in range(2, n):
+        key = (s[i-2], s[i-1])
+        second.setdefault(key, [0, 0])[1] += 1
+        if s[i] == 1:
+            second[key][0] += 1
+    second_prob = {k: v[0]/v[1] for k, v in second.items() if v[1] > 0}
+    overall_t = sum(s) / n
+    return second_prob, overall_t
+
+# =============================================================================
+# THE LIVE SCANNER ENGINE
+# =============================================================================
+def scan_market():
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning {TICKER}...")
+    
+    df = fetch_live_data()
+    if len(df) < 200:
+        print("Not enough data to calculate 200 SMA. Waiting...")
+        return
+
+    df = add_regime_labels(df)
+    df['sma'] = df['Close'].rolling(200).mean()
+    df['atr_median20'] = df['atr'].rolling(20).median()
+    df['vol_ok'] = df['atr'] > 1.1 * df['atr_median20']
+    
+    df.dropna(inplace=True)
+    
+    second_prob, overall_t = compute_probabilities(df['regime'])
+    
+    last_bar = df.iloc[-1]
+    prev_bar = df.iloc[-2]
+    
+    prev2_state = 1 if df['regime'].iloc[-3] == 't' else 0
+    prev1_state = 1 if df['regime'].iloc[-2] == 't' else 0
+    p_t = second_prob.get((prev2_state, prev1_state), overall_t)
+    
+    current_time = last_bar.name.strftime('%H:%M')
+    valid_time = '09:30' <= current_time <= '14:45'
+    
+    price = last_bar['Close']
+    sma = last_bar['sma']
+    atr = last_bar['atr']
+    
+    print(f"  -> Latest Close: {price:.2f} | Prob: {p_t:.2f} | Vol OK: {last_bar['vol_ok']}")
+    
+    if p_t >= ENTRY_THRESH and last_bar['vol_ok'] and valid_time:
+        if prev_bar['Close'] > prev_bar['sma']:
+            sl = price - (ATR_MULT * atr)
+            tp = price + (ATR_MULT * RR_RATIO * atr)
+            msg = f"🟢 **LONG ALERT: {TICKER}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
+            send_telegram_alert(msg)
+            print(">>> SIGNAL FIRED! Waiting 5 minutes...")
+            time.sleep(300) 
+            
+        elif prev_bar['Close'] < prev_bar['sma']:
+            sl = price + (ATR_MULT * atr)
+            tp = price - (ATR_MULT * RR_RATIO * atr)
+            msg = f"🔴 **SHORT ALERT: {TICKER}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
+            send_telegram_alert(msg)
+            print(">>> SIGNAL FIRED! Waiting 5 minutes...")
+            time.sleep(300)
+
+# =============================================================================
+# CONTINUOUS LOOP
+# =============================================================================
+if __name__ == "__main__":
+    print("🚀 Starting Cloud-Ready Markov Scanner...")
+    while True:
+        try:
+            scan_market()
+        except Exception as e:
+            print(f"Error during scan: {e}")
+        time.sleep(300)
