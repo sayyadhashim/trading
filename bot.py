@@ -8,6 +8,7 @@ import warnings
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
+import pytz # ADDED FOR INDIAN TIMEZONE
 
 warnings.filterwarnings('ignore')
 
@@ -24,6 +25,9 @@ RR_RATIO = 3.0
 # YOUR TELEGRAM CREDENTIALS
 TELEGRAM_TOKEN = "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
 TELEGRAM_CHAT_ID = "8125685903"
+
+# NEW: Bot Memory so it doesn't spam you twice for the same trade!
+last_signal_time = {}
 
 def send_telegram_alert(message):
     """Sends the alert directly to your phone via Telegram."""
@@ -79,7 +83,9 @@ def compute_probabilities(states):
 # THE LIVE SCANNER ENGINE
 # =============================================================================
 def scan_market(symbol):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning {symbol}...")
+    # Lock the server clock to India
+    ist = pytz.timezone('Asia/Kolkata')
+    print(f"[{datetime.now(ist).strftime('%H:%M:%S')}] Scanning {symbol}...")
     
     df = fetch_live_data(symbol)
     if len(df) < 200:
@@ -102,7 +108,16 @@ def scan_market(symbol):
     prev1_state = 1 if df['regime'].iloc[-2] == 't' else 0
     p_t = second_prob.get((prev2_state, prev1_state), overall_t)
     
-    current_time = last_bar.name.strftime('%H:%M')
+    # NEW: Force the market candle data into correct IST time
+    bar_time = last_bar.name
+    if bar_time.tzinfo is None:
+        bar_time = ist.localize(bar_time)
+    else:
+        bar_time = bar_time.astimezone(ist)
+        
+    current_time = bar_time.strftime('%H:%M')
+    unique_candle_id = bar_time.strftime('%Y-%m-%d %H:%M') # Used for memory
+    
     valid_time = '09:30' <= current_time <= '14:45'
     
     price = last_bar['Close']
@@ -112,19 +127,27 @@ def scan_market(symbol):
     print(f"  -> {symbol} Close: {price:.2f} | Prob: {p_t:.2f} | Vol OK: {last_bar['vol_ok']}")
     
     if p_t >= ENTRY_THRESH and last_bar['vol_ok'] and valid_time:
+        
+        # CHECK MEMORY: Have we already alerted for this specific timestamp?
+        if last_signal_time.get(symbol) == unique_candle_id:
+            print(f"  -> Already sent alert for {symbol} at {current_time}. Skipping duplicate.")
+            return
+
         if prev_bar['Close'] > prev_bar['sma']:
             sl = price - (ATR_MULT * atr)
             tp = price + (ATR_MULT * RR_RATIO * atr)
-            msg = f"🟢 **LONG ALERT: {symbol}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
+            msg = f"🟢 **LONG ALERT: {symbol}**\n\n*Time:* {current_time} IST\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
             send_telegram_alert(msg)
             print(f">>> SIGNAL FIRED for {symbol}!")
+            last_signal_time[symbol] = unique_candle_id # SAVE TO MEMORY
             
         elif prev_bar['Close'] < prev_bar['sma']:
             sl = price + (ATR_MULT * atr)
             tp = price - (ATR_MULT * RR_RATIO * atr)
-            msg = f"🔴 **SHORT ALERT: {symbol}**\n\n*Time:* {current_time}\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
+            msg = f"🔴 **SHORT ALERT: {symbol}**\n\n*Time:* {current_time} IST\n*Entry:* {price:.2f}\n*Stop Loss:* {sl:.2f}\n*Target (1:3):* {tp:.2f}\n*Markov Prob:* {p_t:.2%}"
             send_telegram_alert(msg)
             print(f">>> SIGNAL FIRED for {symbol}!")
+            last_signal_time[symbol] = unique_candle_id # SAVE TO MEMORY
 
 # =============================================================================
 # DUMMY WEB SERVER (UptimeRobot Safe)
@@ -157,7 +180,6 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"Error scanning {stock}: {e}")
             
-            # Sleep for 5 seconds between each stock to avoid Yahoo Finance rate limits
             time.sleep(5) 
             
         print("✅ Finished scanning watchlist. Sleeping for 5 minutes...")
