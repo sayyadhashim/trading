@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore')
 # CONFIGURATION & TELEGRAM SETUP
 # =============================================================================
 # WATCHLIST
-TICKERS = ["SBIN.NS", "WIPRO.NS", "RELIANCE.NS", "TCS.NS", "INFY.NS"] 
+TICKERS = ["SBIN.NS", "WIPRO.NS", "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "TATAMOTORS.NS"]
 
 ENTRY_THRESH = 0.60
 ATR_MULT = 1.5
