@@ -23,7 +23,7 @@ RR_RATIO = 3.0
 
 # YOUR TELEGRAM CREDENTIALS
 TELEGRAM_TOKEN = "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
-TELEGRAM_CHAT_ID = "8701070280"
+TELEGRAM_CHAT_ID = "8125685903"
 
 def send_telegram_alert(message):
     """Sends the alert directly to your phone via Telegram."""
