@@ -14,14 +14,14 @@ warnings.filterwarnings('ignore')
 # =============================================================================
 # CONFIGURATION & TELEGRAM SETUP
 # =============================================================================
-# ADD YOUR STOCKS HERE! (Make sure they have .NS for National Stock Exchange)
+# WATCHLIST
 TICKERS = ["SBIN.NS", "WIPRO.NS", "RELIANCE.NS", "TCS.NS", "INFY.NS"] 
 
 ENTRY_THRESH = 0.60
 ATR_MULT = 1.5
 RR_RATIO = 3.0
 
-# TODO: Keep your actual Telegram credentials here!
+# YOUR TELEGRAM CREDENTIALS
 TELEGRAM_TOKEN = "8701070280:AAHPIDZpQZLHGar0HEh6f84SEJcJGHbWQys"
 TELEGRAM_CHAT_ID = "8701070280"
 
@@ -76,7 +76,7 @@ def compute_probabilities(states):
     return second_prob, overall_t
 
 # =============================================================================
-# THE LIVE SCANNER ENGINE (Updated for multiple tickers)
+# THE LIVE SCANNER ENGINE
 # =============================================================================
 def scan_market(symbol):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning {symbol}...")
@@ -127,7 +127,7 @@ def scan_market(symbol):
             print(f">>> SIGNAL FIRED for {symbol}!")
 
 # =============================================================================
-# DUMMY WEB SERVER 
+# DUMMY WEB SERVER (UptimeRobot Safe)
 # =============================================================================
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -135,6 +135,11 @@ class DummyHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write(b"Markov Trading Bot is actively scanning the market!")
+        
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
 
 def keep_alive():
     port = int(os.environ.get("PORT", 10000))
