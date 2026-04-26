@@ -437,3 +437,6 @@ if __name__ == "__main__":
         else:
             print(f"[{current_time}] Market closed. Sleeping 10 mins...")
             time.sleep(600)
+elif self.path == "/myip":
+    ip = requests.get("https://api.ipify.org").text
+    self._text(f"Render outbound IP: {ip}")
