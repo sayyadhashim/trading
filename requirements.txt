@@ -2,3 +2,8 @@ yfinance
 pandas
 numpy
 requests
+pytz
+pyotp
+smartapi-python
+logzero
+flask
